@@ -67,12 +67,13 @@ def smoothgrads(
         img_tensor: torch.Tensor,
         proto_id: int,
         location: Tuple[int, int] = None,
-        device: Optional[str] = 'cpu',
+        device: Optional[str] = 'cuda:0',
         polarity: Optional[str] = 'absolute',
         gaussian_ksize: Optional[int] = 5,
-        normalize: Optional[bool] = True,
+        normalize: Optional[bool] = False,
         nsamples: Optional[int] = 10,
         noise: Optional[float] = 0.2,
+        grad_x_input: Optional[bool] = True,
 ) -> np.array:
     """ Perform patch visualization using SmoothGrad
 
@@ -86,6 +87,7 @@ def smoothgrads(
     :param normalize: Perform min-max normalization on gradients
     :param nsamples: Number of samples
     :param noise: Noise level
+    :param grad_x_input: Multiply gradient by input
     :return: gradient map
     """
     if location is None:
@@ -120,6 +122,8 @@ def smoothgrads(
 
     # grads has shape (nsamples) x img_tensor.shape => average across all samples
     grads = np.mean(np.array(grads), axis=0)
+    if grad_x_input:
+        grads *= img_tensor[0].detach().cpu().numpy()
 
     # Post-processing
     grads = polarity_and_collapse(grads, polarity=polarity, avg_chan=0)
@@ -132,19 +136,17 @@ def smoothgrads(
 
 def prp(
         ppnet: nn.Module,
-        base_arch: str,
         img_tensor: torch.Tensor,
         proto_id: int,
         location: Tuple[int, int] = None,
-        device: Optional[str] = 'cpu',
+        device: Optional[str] = 'cuda:0',
         polarity: Optional[str] = 'absolute',
         gaussian_ksize: Optional[int] = 5,
-        normalize: Optional[bool] = True,
+        normalize: Optional[bool] = False,
 ) -> np.array:
     """ Perform patch visualization using SmoothGrad
 
     :param ppnet: ProtoPnet
-    :param base_arch: Base architecture
     :param img_tensor: Input image tensor
     :param proto_id: Prototype index
     :param location: Coordinates of feature vector
@@ -166,7 +168,7 @@ def prp(
         h, w = location
 
     if not hasattr(ppnet, 'canonized'):
-        ppnet = prp_canonize_model(ppnet, base_arch=base_arch, device=device)
+        ppnet = prp_canonize_model(ppnet, base_arch=ppnet.base_arch, device=device)
     ppnet.eval()
     img_tensor.requires_grad = True
 
@@ -175,7 +177,6 @@ def prp(
 
         newl2 = l2_lrp_class.apply
         similarities = newl2(conv_features, ppnet)  # Shape N x P x H x W
-        print(similarities.size())
         min_distances = similarities[:,:,h,w]
 
     '''For individual prototype'''
