@@ -48,6 +48,7 @@ def cubic_upsampling(
         ppnet: nn.Module,
         img_tensor: torch.Tensor,
         proto_id: int,
+        device: str = None,
 ) -> np.array:
     # Partial passes
     _, distances = ppnet.push_forward(img_tensor)  # Shapes N x D x H x W, N x P x H x W
